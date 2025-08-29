@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Business Shield</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Nunito', sans-serif;
+            touch-action: none; 
+        }
+        .font-title {
+            font-family: 'Poppins', sans-serif;
+            font-weight: 700;
+        }
+        .advisor-overlay {
+            background-image: url('https://storage.googleapis.com/pai-images/c2351e8284894354b1b369061e1b5665.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            opacity: 0.1;
+        }
+        .solution-item, .scenario-item {
+            transition: transform 0.2s ease-in-out, opacity 0.2s ease-in-out;
+        }
+        .solution-item {
+            cursor: grab;
+        }
+        .solution-item:active {
+            cursor: grabbing;
+            transform: scale(1.1);
+            z-index: 50;
+        }
+        .dragging-clone {
+            position: fixed;
+            pointer-events: none;
+            z-index: 1000;
+            opacity: 0.7;
+            transform: scale(1.1);
+        }
+        .tray-zone {
+            border: 3px dashed #a0aec0;
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+        .tray-zone.drag-over {
+            background-color: #e2e8f0;
+            border-color: #4a5568;
+        }
+        .modal {
+            transition: opacity 0.25s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 flex items-center justify-center min-h-screen p-4">
+
+    <div id="start-overlay" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[100]">
+        <div class="text-center p-4">
+            <h1 class="font-title text-5xl md:text-7xl text-white mb-4">The Business Shield</h1>
+            <p class="text-gray-300 text-lg md:text-xl mb-8">Click to start your career as an insurance advisor.</p>
+            <button id="start-button" class="bg-blue-700 hover:bg-blue-800 text-white font-bold py-4 px-8 rounded-lg text-2xl transition-transform transform hover:scale-105">
+                Start Game
+            </button>
+        </div>
+    </div>
+
+    <div id="game-container" class="w-full max-w-5xl mx-auto bg-white rounded-2xl shadow-2xl p-6 md:p-8" style="display: none;">
+        
+        <header class="text-center border-b-2 border-gray-200 pb-4 mb-4">
+            <h1 class="font-title text-4xl md:text-5xl text-blue-800">The Business Shield</h1>
+            <p class="text-gray-600 mt-2">Your guide to small business insurance coverage.</p>
+        </header>
+
+        <div id="task-section" class="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-6 text-center">
+            <h2 id="task-title" class="font-title text-2xl text-gray-700 mb-2">Your New Client</h2>
+            <p id="task-description" class="text-gray-700">A new business owner needs your help. Analyze their assets and operations to build the right insurance package.</p>
+        </div>
+        
+        <div class="flex flex-col lg:flex-row gap-6">
+            <!-- Left Side: Scenario and Solutions -->
+            <div class="w-full lg:w-2/3 flex flex-col gap-4">
+                <!-- Client Situation -->
+                <div class="relative border-4 border-gray-700 rounded-lg shadow-inner bg-gray-200 p-4 pt-12">
+                     <h3 class="font-title text-lg text-white bg-gray-700 px-4 py-1 rounded-t-md absolute top-0 left-0">Client's Business Profile</h3>
+                    <div id="scenario-grid" class="flex flex-wrap justify-center items-center gap-4">
+                        <!-- Scenario items will be populated here -->
+                    </div>
+                    <div class="advisor-overlay absolute inset-0 rounded-md pointer-events-none z-10"></div>
+                </div>
+                <!-- Available Solutions -->
+                <div class="border-2 border-gray-300 rounded-lg p-4 bg-gray-50">
+                    <h3 class="font-title text-xl text-gray-700 mb-3 text-center">Available Insurance Policies</h3>
+                    <div id="solution-items-panel" class="flex flex-wrap justify-center items-center gap-2">
+                        <!-- Draggable solution items will be populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Side: Proposal Tray -->
+            <div class="w-full lg:w-1/3 flex flex-col">
+                <div class="text-center mb-4">
+                    <h3 id="solution-title" class="font-title text-xl text-gray-700">Your Proposed Policy Package</h3>
+                    <p id="attempts-display" class="text-lg font-semibold text-gray-600">Attempts Remaining: 3</p>
+                </div>
+                <div id="tray" class="tray-zone flex-grow bg-gray-50 rounded-lg p-4 flex flex-col items-center justify-center min-h-[200px]">
+                    <p id="tray-placeholder" class="text-gray-500 text-center">Drag policies here to build a package (3-5 items)</p>
+                    <div id="tray-items" class="grid grid-cols-2 gap-2 w-full"></div>
+                </div>
+                <button id="submit-btn" class="mt-4 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg text-lg transition-transform transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                    Propose Policy Package
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 opacity-0 pointer-events-none">
+        <div id="modal-content" class="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center transform scale-95 transition-transform">
+            <h2 id="modal-title" class="font-title text-3xl mb-4"></h2>
+            <p id="modal-message" class="text-gray-700 mb-6"></p>
+            <p id="modal-dish" class="text-lg font-semibold text-blue-700 mb-6"></p>
+            <button id="modal-button" class="bg-blue-700 hover:bg-blue-800 text-white font-bold py-2 px-6 rounded-lg">Continue</button>
+        </div>
+    </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- DOM ELEMENTS ---
+        const scenarioGrid = document.getElementById('scenario-grid');
+        const solutionItemsPanel = document.getElementById('solution-items-panel');
+        const tray = document.getElementById('tray');
+        const trayItems = document.getElementById('tray-items');
+        const trayPlaceholder = document.getElementById('tray-placeholder');
+        const submitBtn = document.getElementById('submit-btn');
+        const attemptsDisplay = document.getElementById('attempts-display');
+        const solutionTitle = document.getElementById('solution-title');
+        const modal = document.getElementById('modal');
+        const modalContent = document.getElementById('modal-content');
+        const modalTitle = document.getElementById('modal-title');
+        const modalMessage = document.getElementById('modal-message');
+        const modalDish = document.getElementById('modal-dish');
+        const modalButton = document.getElementById('modal-button');
+        const taskTitle = document.getElementById('task-title');
+        const taskDescription = document.getElementById('task-description');
+        const startOverlay = document.getElementById('start-overlay');
+        const startButton = document.getElementById('start-button');
+        const gameContainer = document.getElementById('game-container');
+
+        // --- AUDIO SETUP ---
+        let audioReady = false;
+        const synth = new Tone.Synth().toDestination();
+        const polySynth = new Tone.PolySynth(Tone.Synth).toDestination();
+        polySynth.volume.value = -6;
+
+        function playSound(type) {
+            if (!audioReady) return;
+            try {
+                switch (type) {
+                    case 'pickup': synth.triggerAttackRelease('C4', '16n'); break;
+                    case 'drop': synth.triggerAttackRelease('G4', '16n', Tone.now() + 0.01); break;
+                    case 'remove': synth.triggerAttackRelease('E4', '16n'); break;
+                    case 'submit': polySynth.triggerAttackRelease(['C3', 'G3', 'C4'], '8n'); break;
+                    case 'success': polySynth.triggerAttackRelease(['C5', 'E5', 'G5', 'C6'], '8n', Tone.now()); break;
+                    case 'failure': polySynth.triggerAttackRelease(['C4', 'D#4', 'A4'], '4n'); break;
+                    case 'gameover': polySynth.triggerAttackRelease(['A3', 'C4', 'E4', 'A4'], '2n'); break;
+                    case 'start': polySynth.triggerAttackRelease(['C4', 'G4', 'C5'], '8n'); break;
+                }
+            } catch (error) { console.error("Audio playback error:", error); }
+        }
+
+        // --- GAME STATE & DATA ---
+        let attempts = 3; 
+        let selectedObjects = [];
+        let draggedItem = null;
+        let currentTask = null;
+        let touchDragClone = null;
+        let isDraggingTouch = false;
+
+        const solutionItems = [
+            { id: 'gen_liability', name: 'General Liability', img: '🛡️', tags: ['policy', 'coverage', 'injury', 'property_damage'] },
+            { id: 'prop_insurance', name: 'Commercial Property', img: '🏢', tags: ['policy', 'coverage', 'assets', 'fire'] },
+            { id: 'biz_interruption', name: 'Business Interruption', img: '⏱️', tags: ['policy', 'coverage', 'income'] },
+            { id: 'prof_liability', name: 'Professional Liability (E&O)', img: '👨‍⚖️', tags: ['policy', 'coverage', 'errors', 'e&o'] },
+            { id: 'cyber_liability', name: 'Cyber Liability', img: '💻', tags: ['policy', 'coverage', 'data_breach'] },
+            { id: 'workers_comp', name: 'Workers Compensation', img: '👨‍⚕️', tags: ['policy', 'coverage', 'employee_injury'] },
+            { id: 'comm_auto', name: 'Commercial Auto', img: '🚚', tags: ['policy', 'coverage', 'vehicle'] },
+            { id: 'epli', name: 'Employment Practices (EPLI)', img: '🤝', tags: ['policy', 'coverage', 'employment'] }
+        ];
+
+        const scenarioItems = [
+            { id: 'coffee_shop', name: 'Retail Storefront', img: '☕', tags: ['asset', 'location'] },
+            { id: 'laptop', name: 'Computer Equipment', img: '🖥️', tags: ['asset', 'equipment', 'data'] },
+            { id: 'employee', name: 'Hires Employees', img: '🧑‍💼', tags: ['person', 'staff'] },
+            { id: 'delivery_van', name: 'Company Vehicle', img: '🚐', tags: ['asset', 'vehicle'] },
+            { id: 'oven', name: 'Specialty Equipment', img: '🔥', tags: ['asset', 'equipment'] },
+            { id: 'customer_data', name: 'Stores Customer Data', img: '📈', tags: ['asset', 'data'] },
+            { id: 'inventory', name: 'Product Inventory', img: '📦', tags: ['asset', 'goods'] },
+            { id: 'consultant', name: 'Gives Professional Advice', img: '🧑‍🏫', tags: ['service', 'advice'] },
+        ];
+
+        const tasks = [
+            {
+                id: 'bakery',
+                title: () => "Insure a New Bakery",
+                description: "This client is opening a bakery. They have a retail storefront with specialty ovens, product inventory, and will be hiring employees. They will also have customers on-site daily.",
+                scenarioItemIds: ['coffee_shop', 'oven', 'inventory', 'employee'],
+                prompt_context: () => `A player must build a comprehensive insurance package for a new bakery. Key risks include customer injury (slip & fall), fire damage to property and equipment, business interruption from damage, and employee injuries.`,
+            },
+            {
+                id: 'consultant',
+                title: () => "Insure a Freelance IT Consultant",
+                description: "This client is an IT consultant who gives professional advice and handles sensitive customer data on their computer equipment. They have no physical storefront or employees.",
+                scenarioItemIds: ['consultant', 'laptop', 'customer_data'],
+                prompt_context: () => `A player must build a package for an IT consultant. Key risks include professional mistakes (errors & omissions) that cause a client financial loss, and liability from a data breach of sensitive customer information.`,
+            },
+            {
+                id: 'florist',
+                title: () => "Insure a Flower Delivery Service",
+                description: "This client runs a flower shop. They have a storefront, product inventory, hire employees, and use a company vehicle for deliveries.",
+                scenarioItemIds: ['coffee_shop', 'inventory', 'employee', 'delivery_van'],
+                prompt_context: () => `A player must build a package for a florist. Key risks include accidents involving the company delivery van, employee injuries, and customer injuries at the shop. Property coverage for the store is also essential.`,
+            }
+        ];
+
+        // --- API CALLS ---
+        const apiKey = ""; // Canvas will provide this
+        
+        const fetchWithBackoff = async (url, options, retries = 3, delay = 1000) => {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (response.ok) return response.json();
+                    console.error(`Attempt ${i + 1} failed with status: ${response.status}`);
+                } catch (error) {
+                    console.error(`Attempt ${i + 1} failed with error:`, error);
+                }
+                await new Promise(res => setTimeout(res, delay * Math.pow(2, i)));
+            }
+            throw new Error('API request failed after multiple retries.');
+        };
+
+        async function checkLogic(items) {
+            const context = currentTask.prompt_context();
+            const prompt = `You are an expert insurance underwriter judging a game. ${context} The player has proposed an insurance package with these policies: ${items.join(', ')}. 
+            
+            Analyze if the selected policies create a comprehensive and appropriate package for this specific business. A good package covers the most significant and obvious risks.
+
+            Respond ONLY with a JSON object in the following format:
+            {
+              "isLogical": boolean,
+              "policyName": "A professional name for this insurance package, like 'Bakery Shield Plus' or 'Consultant's Comprehensive Plan'",
+              "explanation": "A brief, one-sentence explanation for your decision, highlighting a key strength or a critical missing coverage."
+            }`;
+            
+            const payload = {
+                contents: [{ role: "user", parts: [{ text: prompt }] }],
+                generationConfig: { responseMimeType: "application/json" }
+            };
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+            
+            try {
+                const result = await fetchWithBackoff(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                // The API response is expected to be a JSON string.
+                const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (text) {
+                    // The model sometimes returns the JSON wrapped in markdown backticks.
+                    const cleanText = text.replace(/^```json\n/, '').replace(/\n```$/, '');
+                    return JSON.parse(cleanText);
+                }
+                throw new Error("Invalid API response structure");
+            } catch (error) {
+                console.error("Error checking logic:", error);
+                return {
+                    isLogical: false,
+                    policyName: "Review Pending",
+                    explanation: "Our systems are currently busy. Please try again."
+                };
+            }
+        }
+
+        // --- DRAG & DROP LOGIC ---
+        function handleDragStart(e) {
+            const target = e.target.closest('.solution-item');
+            if (!target) return;
+            draggedItem = target;
+            playSound('pickup');
+            setTimeout(() => { target.style.opacity = '0.5'; }, 0);
+        }
+
+        function handleDragEnd(e) {
+            if (draggedItem) {
+                draggedItem.style.opacity = '1';
+                draggedItem = null;
+            }
+        }
+
+        function handleDragOver(e) { e.preventDefault(); tray.classList.add('drag-over'); }
+        function handleDragLeave(e) { tray.classList.remove('drag-over'); }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            tray.classList.remove('drag-over');
+            if (draggedItem && draggedItem.parentElement === solutionItemsPanel && selectedObjects.length < 5) {
+                dropItemOnTray(draggedItem);
+            }
+        }
+        
+        function handleTouchStart(e) {
+            const target = e.target.closest('.solution-item');
+            if (!target || target.parentElement !== solutionItemsPanel) return;
+            isDraggingTouch = true;
+            draggedItem = target;
+            playSound('pickup');
+            draggedItem.style.opacity = '0.5';
+            touchDragClone = draggedItem.cloneNode(true);
+            touchDragClone.classList.add('dragging-clone');
+            document.body.appendChild(touchDragClone);
+            const touch = e.touches[0];
+            moveTouchClone(touch.clientX, touch.clientY);
+        }
+
+        function handleTouchMove(e) {
+            if (!isDraggingTouch || !touchDragClone) return;
+            e.preventDefault();
+            const touch = e.touches[0];
+            moveTouchClone(touch.clientX, touch.clientY);
+            const trayRect = tray.getBoundingClientRect();
+            if (touch.clientX > trayRect.left && touch.clientX < trayRect.right && touch.clientY > trayRect.top && touch.clientY < trayRect.bottom) {
+                tray.classList.add('drag-over');
+            } else {
+                tray.classList.remove('drag-over');
+            }
+        }
+        
+        function handleTouchEnd(e) {
+            if (!isDraggingTouch || !draggedItem) return;
+            const trayRect = tray.getBoundingClientRect();
+            const touch = e.changedTouches[0];
+            if (touch.clientX > trayRect.left && touch.clientX < trayRect.right && touch.clientY > trayRect.top && touch.clientY < trayRect.bottom) {
+                if (selectedObjects.length < 5) {
+                    dropItemOnTray(draggedItem);
+                }
+            }
+            draggedItem.style.opacity = '1';
+            if (touchDragClone) touchDragClone.remove();
+            touchDragClone = null;
+            draggedItem = null;
+            isDraggingTouch = false;
+            tray.classList.remove('drag-over');
+        }
+
+        function moveTouchClone(x, y) {
+            if (!touchDragClone) return;
+            touchDragClone.style.left = `${x - touchDragClone.offsetWidth / 2}px`;
+            touchDragClone.style.top = `${y - touchDragClone.offsetHeight / 2}px`;
+        }
+
+        function dropItemOnTray(item) {
+            const objectId = item.dataset.id;
+            const objectData = solutionItems.find(o => o.id === objectId);
+            selectedObjects.push(objectData);
+            trayItems.appendChild(item);
+            playSound('drop');
+            updateUI();
+        }
+
+        function handleTrayClick(e) {
+            const target = e.target.closest('.solution-item');
+            if (target && target.parentElement === trayItems) {
+                const objectId = target.dataset.id;
+                selectedObjects = selectedObjects.filter(o => o.id !== objectId);
+                solutionItemsPanel.appendChild(target);
+                playSound('remove');
+                updateUI();
+            }
+        }
+        
+        // --- GAME LOGIC & UI UPDATES ---
+        function setupScenario() {
+            scenarioGrid.innerHTML = '';
+            solutionItemsPanel.innerHTML = '';
+            
+            currentTask.scenarioItemIds.forEach(id => {
+                const itemData = scenarioItems.find(item => item.id === id);
+                if (itemData) {
+                    const div = document.createElement('div');
+                    div.className = 'scenario-item bg-white rounded-lg flex flex-col items-center justify-center text-center p-2 shadow-md border border-gray-200 w-28 h-28';
+                    div.innerHTML = `<span class="text-4xl mb-1">${itemData.img}</span><span class="text-sm font-semibold leading-tight">${itemData.name}</span>`;
+                    div.title = itemData.name;
+                    scenarioGrid.appendChild(div);
+                }
+            });
+
+            solutionItems.forEach(obj => {
+                const div = document.createElement('div');
+                div.className = 'solution-item bg-white rounded-lg flex flex-col items-center justify-center text-center p-2 shadow-md border border-gray-200 w-28 h-28';
+                div.draggable = true;
+                div.dataset.id = obj.id;
+                div.innerHTML = `<span class="text-4xl mb-1">${obj.img}</span><span class="text-sm font-semibold leading-tight">${obj.name}</span>`;
+                div.title = obj.name;
+                solutionItemsPanel.appendChild(div);
+            });
+        }
+
+        function updateUI() {
+            attemptsDisplay.textContent = `Attempts Remaining: ${attempts}`;
+            taskTitle.textContent = currentTask.title();
+            taskDescription.textContent = currentTask.description;
+            trayPlaceholder.style.display = selectedObjects.length === 0 ? 'block' : 'none';
+            const canSubmit = selectedObjects.length >= 3 && selectedObjects.length <= 5;
+            submitBtn.disabled = !canSubmit;
+            if (selectedObjects.length > 5) {
+                submitBtn.textContent = 'Too many items!';
+            } else if (selectedObjects.length > 0 && selectedObjects.length < 3) {
+                 submitBtn.textContent = `Select ${3 - selectedObjects.length} more...`;
+            } else if (selectedObjects.length === 0) {
+                 submitBtn.textContent = 'Select 3-5 policies';
+            } else {
+                submitBtn.textContent = 'Propose Policy Package';
+            }
+        }
+        
+        function showModal(isSuccess, message, policyName) {
+            if (isSuccess) {
+                playSound('success');
+                modalTitle.textContent = "Package Approved!";
+            } else {
+                modalTitle.textContent = "Package Incomplete!";
+                if (attempts <= 0) playSound('gameover');
+                else playSound('failure');
+            }
+            modalMessage.textContent = message;
+            modalDish.textContent = `Package Name: ${policyName}`;
+            modalContent.style.border = `4px solid ${isSuccess ? '#22c55e' : '#ef4444'}`;
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            modalContent.classList.remove('scale-95');
+        }
+
+        function hideModal() {
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            modalContent.classList.add('scale-95');
+        }
+
+        async function handleSubmit() {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Underwriting...';
+            playSound('submit');
+            const itemNames = selectedObjects.map(o => o.name);
+            const result = await checkLogic(itemNames);
+            if (result.isLogical) {
+                showModal(true, "Congratulations! You've built a solid insurance package that protects your client's business!", result.policyName);
+                modalButton.textContent = "New Client";
+                modalButton.onclick = startNewGame;
+            } else {
+                attempts--;
+                updateUI();
+                if (attempts <= 0) {
+                    showModal(false, "You've run out of attempts! Your client has lost confidence and will seek advice elsewhere.", "You Lost the Client!");
+                    modalButton.textContent = "Try Again";
+                    modalButton.onclick = startNewGame;
+                } else {
+                    showModal(false, result.explanation, `Verdict: ${result.policyName}`);
+                    modalButton.textContent = "Revise Package";
+                    modalButton.onclick = () => {
+                        hideModal();
+                        [...trayItems.children].forEach(child => solutionItemsPanel.appendChild(child));
+                        selectedObjects = [];
+                        updateUI();
+                    };
+                }
+            }
+        }
+
+        function resetGame() {
+            currentTask = tasks[Math.floor(Math.random() * tasks.length)];
+            selectedObjects = [];
+            trayItems.innerHTML = '';
+            setupScenario();
+            updateUI();
+            hideModal();
+            playSound('start');
+        }
+
+        function startNewGame() {
+            attempts = 3;
+            resetGame();
+        }
+
+        function init() {
+            startButton.addEventListener('click', async () => {
+                await Tone.start();
+                audioReady = true;
+                startOverlay.style.display = 'none';
+                gameContainer.style.display = 'block';
+                startNewGame();
+            }, { once: true });
+
+            document.addEventListener('dragstart', handleDragStart);
+            document.addEventListener('dragend', handleDragEnd);
+            document.addEventListener('touchstart', handleTouchStart, { passive: false });
+            document.addEventListener('touchmove', handleTouchMove, { passive: false });
+            document.addEventListener('touchend', handleTouchEnd);
+            tray.addEventListener('dragover', handleDragOver);
+            tray.addEventListener('dragleave', handleDragLeave);
+            tray.addEventListener('drop', handleDrop);
+            tray.addEventListener('click', handleTrayClick);
+            submitBtn.addEventListener('click', handleSubmit);
+        }
+
+        init();
+    });
+</script>
+
+</body>
+</html>
